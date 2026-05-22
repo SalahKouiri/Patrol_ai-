@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LIMO Command Center</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@5.0.1/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background: #f1f5f9; color: #0f172a; }
+
+        .topbar { 
+            display: grid; 
+            grid-template-columns: 1fr auto 1fr; 
+            align-items: center; 
+            background: #ffffff; 
+            border-radius: 16px; 
+            padding: 10px 30px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+        }
+
+        .logo-section { display: flex; align-items: center; }
+        .logo-img { height: 65px; width: auto; object-fit: contain; }
+
+        .brand-text { text-align: center; }
+        .brand-text .title { font-size: 28px; font-weight: 800; color: #2563eb; margin: 0; letter-spacing: -0.5px; }
+        .brand-text .subtitle { font-size: 13px; color: #64748b; margin-top: 2px; }
+
+        .connection-panel { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+        .connection-row { display: flex; gap: 10px; }
+        .connection-row input { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; width: 220px; font-size: 13px; }
+        .btn-connect { padding: 8px 18px; border: none; border-radius: 8px; background: #2563eb; color: white; font-weight: 700; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+        .btn-connect:hover { background: #1d4ed8; transform: translateY(-1px); }
+        .status { font-size: 11px; font-weight: 800; margin-right: 5px; }
+        .status.connected { color: #10b981; }
+        .status.disconnected { color: #ef4444; }
+
+        .dashboard { 
+            display: grid; 
+            grid-template-columns: 340px 1fr 300px; 
+            gap: 25px; 
+            max-width: 1800px; 
+            margin: 0 auto; 
+        }
+
+        .panel { background: #ffffff; border-radius: 18px; padding: 20px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.7); }
+        .panel h3 { margin-top: 0; font-size: 18px; color: #334155; border-bottom: 2px solid #f8fafc; padding-bottom: 12px; margin-bottom: 18px; }
+
+        .center-panel { display: flex; flex-direction: column; gap: 20px; }
+        
+        .rviz-hero { 
+            background: #0f172a; 
+            border: 4px solid #3b82f6; 
+            border-radius: 24px; 
+            overflow: hidden; 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); 
+        }
+        .rviz-frame { width: 100%; height: 580px; border: none; display: block; }
+
+        .image-view { width: 100%; border-radius: 14px; background: #000; aspect-ratio: 16/9; display: block; object-fit: cover; border: 2px solid #e2e8f0; }
+
+        .ai-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .ai-toggle input { display: none; }
+        .ai-toggle .slider { width: 40px; height: 20px; background: #cbd5e1; border-radius: 20px; position: relative; transition: 0.3s; }
+        .ai-toggle .slider::before { content: ""; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .ai-toggle input:checked + .slider { background: #8b5cf6; } 
+        .ai-toggle input:checked + .slider::before { transform: translateX(20px); }
+        .toggle-label { font-size: 13px; font-weight: 800; color: #64748b; transition: 0.3s; }
+        .ai-toggle input:checked ~ .toggle-label { color: #8b5cf6; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-content { background: #ffffff; width: 80%; max-width: 1000px; height: 80vh; border-radius: 20px; padding: 30px; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 20px; }
+        .modal-header h2 { margin: 0; color: #1e293b; font-size: 24px; }
+        .close-btn { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; overflow-y: auto; padding-right: 10px; }
+        .report-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
+        .report-card img { width: 100%; border-radius: 8px; margin-bottom: 10px; aspect-ratio: 4/3; object-fit: cover; }
+        .report-card .info { font-size: 13px; color: #475569; margin: 2px 0; }
+        .report-card .title { font-weight: 800; color: #b91c1c; font-size: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 8px; }
+
+        .joystick-container { width: 100%; height: 220px; background: #f8fafc; border-radius: 50%; border: 2px dashed #cbd5e1; position: relative; margin: 0 auto; }
+        .keyboard-grid { display: grid; justify-content: center; gap: 10px; margin-top: 25px; }
+        .key { width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 12px; font-weight: 800; border-bottom: 5px solid #cbd5e1; color: #64748b; transition: 0.1s; }
+        .key.active { background: #dbeafe; border-color: #2563eb; color: #2563eb; transform: translateY(3px); border-bottom-width: 2px; }
+
+        .speed-controls label { font-size: 13px; font-weight: 600; color: #64748b; }
+        .speed-val { font-weight: 800; color: #2563eb; float: right; font-family: monospace; }
+        .input[type="range"] { width: 100%; margin-top: 10px; cursor: pointer; }
+
+        .terminal-box { background: #0f172a; color: #38bdf8; font-family: 'Fira Code', 'Courier New', monospace; font-size: 11px; padding: 15px; height: 380px; overflow-y: auto; border-radius: 14px; border: 1px solid #334155; }
+        .terminal-box p { margin: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 3px; }
+        .log-time { color: #94a3b8; margin-right: 6px; }
+        .log-success { color: #4ade80; }
+        .log-warn { color: #fbbf24; }
+        .log-error { color: #f87171; }
+
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; color: white; font-weight: 700; cursor: pointer; margin-bottom: 10px; transition: all 0.2s; font-size: 14px; }
+        .btn-success { background: #10b981; box-shadow: 0 4px 0 #059669; }
+        .btn-danger { background: #ef4444; box-shadow: 0 4px 0 #dc2626; }
+        .btn-warning { background: #f59e0b; box-shadow: 0 4px 0 #d97706; }
+        .btn:active { transform: translateY(3px); box-shadow: none; }
+
+        @media (max-width: 1400px) { .dashboard { grid-template-columns: 1fr; } .center-panel { order: -1; } }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="logo-section">
+            <img src="logo.png" alt="LPRI Logo" class="logo-img" onerror="this.style.display='none'" />
+        </div>
+
+        <div class="brand-text">
+            <div class="title">LIMO Command Center</div>
+            <div class="subtitle">Project Lead: <strong>Kouiri Salaheddine</strong> | Supervised by Ameur Soufiane</div>
+        </div>
+
+        <div class="connection-panel">
+            <div class="connection-row">
+                <input type="text" id="rosbridge-address" value="ws://172.20.40.66:9090" />
+                <button class="btn-connect" onclick="connectToROS()">Initialize Link</button>
+            </div>
+            <div id="connection-status" class="status disconnected">● OFFLINE</div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="left-panel">
+            <div class="panel">
+                <h3>Manual Override</h3>
+                <div class="joystick-container" id="joystick"></div>
+                <div class="keyboard-grid">
+                    <div style="grid-column: 2" class="key" id="key-w">W</div>
+                    <div class="key" id="key-a">A</div>
+                    <div class="key" id="key-s">S</div>
+                    <div class="key" id="key-d">D</div>
+                </div>
+            </div>
+
+            <div class="panel speed-controls">
+                <h3>Thrust Parameters</h3>
+                <label>Linear Velocity <span class="speed-val" id="linear-speed-value">0.50</span></label>
+                <input type="range" id="linear-speed" min="0.1" max="1.5" step="0.05" value="0.5" />
+                <div style="margin-top:20px"></div>
+                <label>Angular Velocity <span class="speed-val" id="angular-speed-value">0.90</span></label>
+                <input type="range" id="angular-speed" min="0.1" max="2.0" step="0.05" value="0.9" />
+            </div>
+            
+            <div class="panel">
+                <h3>Robot Pose</h3>
+                <p>Global X: <span id="position-x" style="font-weight: 800; color: #2563eb;">0.00</span></p>
+                <p>Global Y: <span id="position-y" style="font-weight: 800; color: #2563eb;">0.00</span></p>
+            </div>
+        </div>
+
+        <div class="center-panel">
+            <div class="rviz-hero">
+                <iframe src="http://172.20.40.66:6080/vnc.html?resize=scale&autoconnect=true" class="rviz-frame" allowfullscreen></iframe>
+            </div>
+            
+            <div class="panel">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <div style="display:flex; align-items:center; gap: 15px;">
+                        <h3 style="margin:0; border:none;">High-Res Vision Feed</h3>
+                        <label class="ai-toggle">
+                            <input type="checkbox" id="ai-vision-toggle" onchange="toggleAIVision()">
+                            <span class="slider"></span>
+                            <span class="toggle-label">AI OVERLAY</span>
+                        </label>
+                    </div>
+
+                    <span id="camera-badge" style="background:#fee2e2; color:#ef4444; padding:4px 12px; border-radius:20px; font-size:11px; font-weight:800;">CAM OFFLINE</span>
+                </div>
+                <canvas class="image-view" id="camera-feed" width="1280" height="720"></canvas>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="panel">
+                <h3>Core Operations</h3>
+                <button class="btn btn-success" onclick="sendCommand('START_MAPPING')">Launch SLAM</button>
+                <button class="btn btn-success" onclick="startNavigation()">Begin Navigation</button>
+                <button class="btn btn-danger" onclick="sendCommand('STOP')">Emergency Stop</button>
+                <div style="margin-top:20px;"></div>
+                <input type="text" id="map-name" placeholder="map_name" value="warehouse_v1" style="width:100%; padding:12px; border-radius:10px; border:1px solid #cbd5e1; margin-bottom:10px; font-size: 13px;" />
+                <button class="btn btn-warning" onclick="saveMap()">Sync Map to Disk</button>
+                <button class="btn" style="background: #8b5cf6; margin-top: 10px; box-shadow: 0 4px 0 #6d28d9;" onclick="document.getElementById('report-modal').style.display='flex'">View Full Inspection Report</button>
+            </div>
+
+            <div class="panel" id="incident-panel" style="display: none; border: 2px solid #ef4444; background: #fef2f2; animation: flash 1s infinite alternate;">
+                <h3 style="color: #ef4444; border-bottom: 2px solid #fecaca; margin-bottom: 10px;">🚨 AI Anomaly Detected</h3>
+                <img id="incident-image" src="" style="width: 100%; border-radius: 8px; margin-bottom: 10px; border: 1px solid #fca5a5;" />
+                <p id="incident-text" style="font-weight: 800; color: #7f1d1d; text-align: center; margin: 0; font-size: 14px;"></p>
+                <button class="btn btn-warning" style="margin-top: 10px; padding: 8px;" onclick="document.getElementById('incident-panel').style.display='none'">Dismiss Alert</button>
+            </div>
+
+            <div class="panel">
+                <h3>Mission Log</h3>
+                <div id="terminal" class="terminal-box">
+                    <p><span class="log-time">[System]</span> Awaiting Link Initialization...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="report-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📋 Final Inspection Log</h2>
+                <button class="close-btn" onclick="document.getElementById('report-modal').style.display='none'">Close Report</button>
+            </div>
+            <div class="gallery-grid" id="report-gallery">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        let ros;
+        let cmdVelTopic, activeVisionTopic, odomTopic, dashboardTopic, alertTopic;
+        let joystick;
+        let publishTimer = null;
+        let lastPublishedZero = false;
+        let joystickTwist = { linear: { x: 0 }, angular: { z: 0 } };
+        const keys = { w: false, a: false, s: false, d: false };
+
+        function sysLog(message, type="normal") {
+            const term = document.getElementById('terminal');
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            let color = "";
+            if(type === "error") color = "log-error";
+            if(type === "success") color = "log-success";
+            if(type === "warn") color = "log-warn";
+            term.innerHTML += `<p><span class="log-time">[${time}]</span> <span class="${color}">${message}</span></p>`;
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function connectToROS() {
+            const addr = document.getElementById('rosbridge-address').value;
+            if (ros) ros.close();
+            
+            sysLog("Connecting to Bridge...", "warn");
+            ros = new ROSLIB.Ros({ url: addr });
+
+            ros.on('connection', () => {
+                sysLog("Link Established Successfully.", "success");
+                document.getElementById('connection-status').textContent = "● ONLINE";
+                document.getElementById('connection-status').className = "status connected";
+                setupTopics();
+            });
+
+            ros.on('error', () => {
+                sysLog("Link Error: Check IP or Bridge.", "error");
+                document.getElementById('connection-status').className = "status disconnected";
+            });
+        }
+
+        function setupTopics() {
+            cmdVelTopic = new ROSLIB.Topic({ ros: ros, name: '/cmd_vel_teleop', messageType: 'geometry_msgs/Twist' });
+            dashboardTopic = new ROSLIB.Topic({ ros: ros, name: '/dashboard_cmd', messageType: 'std_msgs/String' });
+            
+            startVisionStream(false); 
+
+            odomTopic = new ROSLIB.Topic({ ros: ros, name: '/odom', messageType: 'nav_msgs/Odometry' });
+            odomTopic.subscribe((msg) => {
+                document.getElementById('position-x').textContent = msg.pose.pose.position.x.toFixed(2);
+                document.getElementById('position-y').textContent = msg.pose.pose.position.y.toFixed(2);
+            });
+
+            alertTopic = new ROSLIB.Topic({ ros: ros, name: '/spotter/alerts', messageType: 'std_msgs/String' });
+            alertTopic.subscribe((msg) => {
+                try {
+                    const alertData = JSON.parse(msg.data);
+                    triggerDashboardAlert(alertData);
+                } catch (e) {
+                    console.error("Failed to parse alert JSON", e);
+                }
+            });
+
+            setupJoystick();
+            setupKeyboard();
+            setupSliders();
+            startLoop();
+        }
+
+        function startVisionStream(isAI) {
+            if (activeVisionTopic) {
+                activeVisionTopic.unsubscribe();
+            }
+
+            const topicName = isAI ? '/spotter/annotated_image/compressed' : '/camera/color/image_raw/compressed';
+
+            activeVisionTopic = new ROSLIB.Topic({
+                ros: ros,
+                name: topicName,
+                messageType: 'sensor_msgs/CompressedImage'
+            });
+
+            const canvas = document.getElementById('camera-feed');
+            const ctx = canvas.getContext('2d');
+
+            activeVisionTopic.subscribe((msg) => {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    document.getElementById('camera-badge').textContent = isAI ? "AI SCANNING" : "LIVE STREAM";
+                    document.getElementById('camera-badge').style.background = isAI ? "#ede9fe" : "#dcfce7";
+                    document.getElementById('camera-badge').style.color = isAI ? "#7c3aed" : "#166534";
+                };
+                img.src = 'data:image/jpeg;base64,' + msg.data;
+            });
+        }
+
+        function toggleAIVision() {
+            const isAI = document.getElementById('ai-vision-toggle').checked;
+            sysLog("Switched Vision Mode: " + (isAI ? "YOLO OVERLAY" : "RAW FEED"), "warn");
+            startVisionStream(isAI);
+        }
+
+        function triggerDashboardAlert(alertData) {
+            sysLog(`🚨 OBSTACLE DETECTED: ${alertData.label} at ${alertData.distance}m!`, "error");
+            
+            const incidentPanel = document.getElementById('incident-panel');
+            const imagePath = `anomalies_log/${alertData.image}`;
+            
+            document.getElementById('incident-image').src = imagePath;
+            document.getElementById('incident-text').textContent = `${alertData.label} DETECTED AT ${alertData.distance} METERS`;
+            incidentPanel.style.display = "block";
+
+            const gallery = document.getElementById('report-gallery');
+            const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+            
+            const cardHTML = `
+                <div class="report-card">
+                    <div class="title">⚠️ ${alertData.label}</div>
+                    <img src="${imagePath}" alt="Anomaly Image">
+                    <p class="info"><strong>Time:</strong> ${timeStr}</p>
+                    <p class="info"><strong>Map Coordinates:</strong></p>
+                    <p class="info" style="font-family: monospace; color: #2563eb;">X: ${alertData.x} | Y: ${alertData.y}</p>
+                    <p class="info"><strong>Distance from Limo:</strong> ${alertData.distance}m</p>
+                </div>
+            `;
+            
+            gallery.innerHTML += cardHTML;
+        }
+
+        function startLoop() {
+            if (publishTimer) clearInterval(publishTimer);
+            publishTimer = setInterval(() => {
+                const active = keys.w || keys.a || keys.s || keys.d || joystickTwist.linear.x !== 0 || joystickTwist.angular.z !== 0;
+                if (active) { publishTwist(); lastPublishedZero = false; } 
+                else if (!lastPublishedZero) { publishTwist(); lastPublishedZero = true; }
+            }, 100);
+        }
+
+        function publishTwist() {
+            const linMax = parseFloat(document.getElementById('linear-speed').value);
+            const angMax = parseFloat(document.getElementById('angular-speed').value);
+            let finalLin = joystickTwist.linear.x;
+            let finalAng = joystickTwist.angular.z;
+            if (keys.w) finalLin = linMax;
+            if (keys.s) finalLin = -linMax;
+            if (keys.a) finalAng = angMax;
+            if (keys.d) finalAng = -angMax;
+            cmdVelTopic.publish(new ROSLIB.Message({ linear: { x: finalLin, y: 0, z: 0 }, angular: { x: 0, y: 0, z: finalAng } }));
+        }
+
+        function setupJoystick() {
+            if(joystick) joystick.destroy();
+            joystick = nipplejs.create({ zone: document.getElementById('joystick'), mode: 'static', position: { left: '50%', top: '50%' }, color: '#2563eb', size: 140 });
+            joystick.on('move', (e, data) => {
+                const linMax = parseFloat(document.getElementById('linear-speed').value);
+                const angMax = parseFloat(document.getElementById('angular-speed').value);
+                const dist = Math.min(data.distance / 70, 1.0);
+                joystickTwist.linear.x = Math.sin(data.angle.radian) * linMax * dist;
+                joystickTwist.angular.z = -Math.cos(data.angle.radian) * angMax * dist;
+            });
+            joystick.on('end', () => { joystickTwist = { linear: { x: 0 }, angular: { z: 0 } }; });
+        }
+
+        function setupKeyboard() {
+            document.addEventListener('keydown', (e) => {
+                if (['w','a','s','d'].includes(e.key.toLowerCase())) {
+                    keys[e.key.toLowerCase()] = true;
+                    document.getElementById('key-'+e.key.toLowerCase()).classList.add('active');
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                if (['w','a','s','d'].includes(e.key.toLowerCase())) {
+                    keys[e.key.toLowerCase()] = false;
+                    document.getElementById('key-'+e.key.toLowerCase()).classList.remove('active');
+                }
+            });
+        }
+
+        function setupSliders() {
+            const lS = document.getElementById('linear-speed');
+            const aS = document.getElementById('angular-speed');
+            lS.oninput = () => document.getElementById('linear-speed-value').textContent = parseFloat(lS.value).toFixed(2);
+            aS.oninput = () => document.getElementById('angular-speed-value').textContent = parseFloat(aS.value).toFixed(2);
+        }
+
+        function sendCommand(cmd) {
+            sysLog("Executing: " + cmd, "warn");
+            dashboardTopic.publish(new ROSLIB.Message({ data: cmd }));
+        }
+
+        function startNavigation() {
+            const map = document.getElementById('map-name').value;
+            sysLog("Navigating Map: " + map, "success");
+            sendCommand('START_NAV:' + map);
+        }
+
+        function saveMap() {
+            const map = document.getElementById('map-name').value;
+            const client = new ROSLIB.Service({ ros: ros, name: '/slam_toolbox/save_map', serviceType: 'slam_toolbox_msgs/srv/SaveMap' });
+            const req = new ROSLIB.ServiceRequest({ name: { data: '/home/agilex/limo_ros2_ws/src/limo_ros2/limo_bringup/maps/' + map } });
+            sysLog("Saving Map to disk...", "warn");
+            client.callService(req, (res) => sysLog("Map Saved!", "success"), (err) => sysLog("Save Failed", "error"));
+        }
+    </script>
+</body>
+</html>

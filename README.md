@@ -142,4 +142,4 @@ ros2 run limo_bringup spotter.py
 
 ## Why I kept this repo simple
 
-I kept this repository limited to the files I actually wrote and shared. I did not add a full ROS workspace, package manifests, or build files. This is intentionally the working core of the project, not a reconstructed ROS stack.
+I kept this repository limited to the files I actually wrote. I did not add a full ROS workspace, package manifests, or build files. This is intentionally the working core of the project, not a reconstructed ROS stack.
